@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang=“en”>
+<head>
+  <meta charset=“UTF-8”>
+  <meta name=“viewport” content=“width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no”>
+  <title>Breakout</title>
+  <style>
+    :root {
+      —bg: #121212;
+      —surface: #1e1e1e;
+      —text: #e0e0e0;
+      —accent: #00d4ff;
+      —button: #333;
+      —hover: #444;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(—bg);
+      color: var(—text);
+      font-family: -apple-system, BlinkMacSystemFont, ‘Segoe UI’, Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .container {
+      background: var(—surface);
+      padding: 1rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      width: 100%;
+      max-width: 360px;
+      height: 600px;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    canvas {
+      flex: 1;
+      background: #000;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      touch-action: none;
+    }
+    .ui {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+    button {
+      background: var(—button);
+      color: var(—text);
+      border: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(—hover); }
+    button:active { transform: scale(0.96); }
+    #pauseBtn { background: var(—accent); color: #000; font-weight: 600; }
+    #pauseBtn:hover { background: #00e6ff; }
+    #message {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(—accent);
+      pointer-events: none;
+      text-align: center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class=“container”>
+    <div class=“ui”>
+      <span id=“score”>Score: 0</span>
+      <span id=“lives”>Lives: 3</span>
+    </div>
+    <canvas id=“canvas”></canvas>
+    <div class=“ui”>
+      <button id=“pauseBtn”>Pause</button>
+      <button id=“restartBtn”>Restart</button>
+    </div>
+    <div id=“message”></div>
+  </div>
+  <script>
+    const canvas = document.getElementById(‘canvas’);
+    const ctx = canvas.getContext(‘2d’);
+    const scoreEl = document.getElementById(‘score’);
+    const livesEl = document.getElementById(‘lives’);
+    const pauseBtn = document.getElementById(‘pauseBtn’);
+    const restartBtn = document.getElementById(‘restartBtn’);
+    const message = document.getElementById(‘message’);
+
+    let width, height;
+    function resize() {
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener(‘resize’, resize);
+    resize();
+
+    const paddle = { w: width * 0.25, h: 12, x: width / 2 - width * 0.125, y: height - 30 };
+    const ball = { r: 8, x: width / 2, y: height / 2, dx: 4, dy: -4 };
+    const brickRows = 5, brickCols = 8;
+    const brickW = width / brickCols - 4;
+    const brickH = 20;
+    const brickGap = 4;
+    let bricks = [];
+    let score = 0, lives = 3, level = 1, speedFactor = 1;
+    let paused = false, gameOver = false;
+
+    function initBricks() {
+      bricks = [];
+      for (let r = 0; r < brickRows; r++) {
+        for (let c = 0; c < brickCols; c++) {
+          bricks.push({ x: c * (brickW + brickGap), y: r * (brickH + brickGap), alive: true });
+        }
+      }
+    }
+    initBricks();
+
+    let touchId = null;
+    canvas.addEventListener(‘mousedown’, e => { touchId = e.identifier || 0; paddle.x = e.clientX - paddle.w / 2; });
+    canvas.addEventListener(‘mousemove’, e => { if (touchId !== null || e.buttons) paddle.x = e.clientX - paddle.w / 2; });
+    canvas.addEventListener(‘mouseup’, () => touchId = null);
+    canvas.addEventListener(‘mouseleave’, () => touchId = null);
+    canvas.addEventListener(‘touchstart’, e => { touchId = e.changedTouches[0].identifier; paddle.x = e.changedTouches[0].clientX - paddle.w / 2; });
+    canvas.addEventListener(‘touchmove’, e => {
+      for (let t of e.changedTouches) {
+        if (t.identifier === touchId) { paddle.x = t.clientX - paddle.w / 2; break; }
+      }
+    });
+    canvas.addEventListener(‘touchend’, e => {
+      for (let t of e.changedTouches) if (t.identifier === touchId) touchId = null;
+    });
+
+    pauseBtn.addEventListener(‘click’, () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? ‘Resume’ : ‘Pause’;
+      message.style.display = paused ? ‘block’ : ‘none’;
+      message.textContent = paused ? ‘Paused’ : ‘’;
+    });
+
+    restartBtn.addEventListener(‘click’, () => {
+      score = 0; lives = 3; level = 1; speedFactor = 1;
+      ball.x = width / 2; ball.y = height / 2; ball.dx = 4; ball.dy = -4;
+      paddle.x = width / 2 - paddle.w / 2;
+      initBricks();
+      gameOver = false; paused = false;
+      pauseBtn.textContent = ‘Pause’;
+      message.style.display = ‘none’;
+      updateUI();
+    });
+
+    function updateUI() {
+      scoreEl.textContent = `Score: ${score}`;
+      livesEl.textContent = `Lives: ${lives}`;
+    }
+
+    function drawBricks() {
+      for (let b of bricks) {
+        if (b.alive) {
+          ctx.fillStyle = `hsl(${(b.y / brickH) * 60}, 80%, 60%)`;
+          ctx.fillRect(b.x, b.y, brickW, brickH);
+          ctx.strokeStyle = ‘#000’;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(b.x, b.y, brickW, brickH);
+        }
+      }
+    }
+
+    function drawPaddle() {
+      ctx.fillStyle = ‘#aaa’;
+      ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+      ctx.strokeStyle = ‘#000’;
+      ctx.strokeRect(paddle.x, paddle.y, paddle.w, paddle.h);
+    }
+
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      ctx.fillStyle = ‘#00d4ff’;
+      ctx.fill();
+      ctx.strokeStyle = ‘#000’;
+      ctx.stroke();
+    }
+
+    function collisionDetection() {
+      for (let b of bricks) {
+        if (b.alive) {
+          if (ball.x + ball.r > b.x && ball.x - ball.r < b.x + brickW &&
+              ball.y + ball.r > b.y && ball.y - ball.r < b.y + brickH) {
+            b.alive = false;
+            score += 10;
+            updateUI();
+            if (ball.y - ball.r < b.y + brickH && ball.y + ball.r > b.y) ball.dy *= -1;
+            else ball.dx *= -1;
+            break;
+          }
+        }
+      }
+    }
+
+    function checkWin() {
+      const alive = bricks.filter(b => b.alive).length;
+      if (alive === 0) {
+        level++;
+        speedFactor += 0.2;
+        ball.dx *= 1.1; ball.dy *= 1.1;
+        initBricks();
+        ball.x = width / 2; ball.y = height / 2;
+      }
+    }
+
+    function draw() {
+      if (paused || gameOver) return;
+      ctx.clearRect(0, 0, width, height);
+      drawBricks();
+      drawPaddle();
+      drawBall();
+
+      ball.x += ball.dx * speedFactor;
+      ball.y += ball.dy * speedFactor;
+
+      if (ball.x + ball.r > width || ball.x - ball.r < 0) ball.dx *= -1;
+      if (ball.y - ball.r < 0) ball.dy *= -1;
+
+      if (ball.y + ball.r > paddle.y && ball.y - ball.r < paddle.y + paddle.h &&
+          ball.x + ball.r > paddle.x && ball.x - ball.r < paddle.x + paddle.w) {
+        const hitPos = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
+        ball.dx = hitPos * 6;
+        ball.dy = -Math.abs(ball.dy);
+      }
+
+      if (ball.y + ball.r > height) {
+        lives—;
+        updateUI();
+        if (lives <= 0) {
+          gameOver = true;
+          message.style.display = ‘block’;
+          message.textContent = ‘Game Over’;
+          pauseBtn.textContent = ‘Pause’;
+        } else {
+          ball.x = width / 2; ball.y = height / 2; ball.dx = 4; ball.dy = -4;
+          paddle.x = width / 2 - paddle.w / 2;
+        }
+      }
+
+      collisionDetection();
+      checkWin();
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
