@@ -1,0 +1,6 @@
+{
+  "device": "iPhone",
+  "tools": ["Working Copy", "Bonsai"],
+  "host": "OMEN",
+  "test": "vibe coding"
+}
